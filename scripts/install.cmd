@@ -434,6 +434,21 @@ if exist "%USERSETTINGS_SOURCE%" (
     echo   [WARN] UserSettings.ini not found in scripts folder
 )
 
+:: Force-disable the intro movie regardless of whether UserSettings.ini was just
+:: copied or already existed. On a machine with a pre-existing Civ V install (a
+:: UserSettings.ini from before Vox Deorum), the copy-if-missing logic above never
+:: touches it, silently leaving SkipIntroVideo at its old value and adding a ~3
+:: minute unskippable video to every launch. Patch just this one key so we don't
+:: clobber any of the player's other pre-existing settings.
+if exist "%USERSETTINGS_DEST%" (
+    powershell -NoProfile -Command "(Get-Content -LiteralPath '%USERSETTINGS_DEST%') -replace '^SkipIntroVideo\s*=.*', 'SkipIntroVideo = 1' | Set-Content -LiteralPath '%USERSETTINGS_DEST%'" >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo   [OK] SkipIntroVideo forced on in UserSettings.ini
+    ) else (
+        echo   [WARN] Could not force SkipIntroVideo in %USERSETTINGS_DEST%
+    )
+)
+
 :: Install Node.js dependencies
 echo.
 echo [9/10] Installing Node.js dependencies...
