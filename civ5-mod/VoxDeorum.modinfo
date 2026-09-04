@@ -29,7 +29,7 @@
   <Files>
     <File md5="F8F6AABA8C4278EBCD58E50B69A2519B" import="0">SQL/VoxDeorum_Options.sql</File>
     <File md5="F6F89F2AA28625F4CAA536C36FF07332" import="0">Text/VoxDeorum_Text.xml</File>
-    <File md5="A7481039937352DDF837B3C8F0167E2C" import="0">Text/VoxDeorum_Text.sql</File>
+    <File md5="33CA4604421E8178D0D7591CC340CB11" import="0">Text/VoxDeorum_Text.sql</File>
     <File md5="3A42737A457702DFE8A466F6C000BC18" import="1">Mapscripts/Vox_Deorum.lua</File>
     <File md5="3FA079BC0DAF46A51730AF10F05A8892" import="0">Lua/VoxDeorumTest.lua</File>
     <File md5="9C7CAAB0E8FB817E9FB26A29AD4555F1" import="1">UI/VoxDeorumHumanPanel.lua</File>
@@ -53,13 +53,7 @@
   </Files>
   <Actions>
     <OnModActivated>
-      <!-- Vox Deorum: SQL/VoxDeorum_Options.sql (still shipped below in <Files>, for
-           reference) consistently applied zero rows in-game despite being syntactically
-           valid -- confirmed by executing it directly against a copy of the merged
-           database, and confirmed the failure persists regardless of its position in
-           this list. Root cause unresolved; see docs/plans/windows-onboarding-learnings.md.
-           Its statements were relocated into Text/VoxDeorum_Text.sql below, which merges
-           reliably every launch, so it's no longer listed as an UpdateDatabase action here. -->
+      <UpdateDatabase>SQL/VoxDeorum_Options.sql</UpdateDatabase>
       <UpdateDatabase>Text/VoxDeorum_Text.xml</UpdateDatabase>
       <UpdateDatabase>Text/VoxDeorum_Text.sql</UpdateDatabase>
       <UpdateDatabase>XML/VoxDeorum_Notifications.xml</UpdateDatabase>
