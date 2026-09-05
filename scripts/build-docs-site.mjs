@@ -34,6 +34,26 @@ const EXTRA_SOURCES = [
     absPath: path.join(REPO_ROOT, 'civ5-dll', 'CvGameCoreDLL_Expansion2', 'GAMECORE_OVERVIEW.md'),
     intoDir: 'civ5-dll',
   },
+  {
+    absPath: path.join(REPO_ROOT, 'civ5-dll', 'README.md'),
+    intoDir: 'civ5-dll',
+  },
+  {
+    absPath: path.join(REPO_ROOT, 'civ5-dll', 'DEVELOPMENT.md'),
+    intoDir: 'civ5-dll',
+  },
+  {
+    absPath: path.join(REPO_ROOT, 'civ5-dll', 'docs', 'build-toolchain.md'),
+    intoDir: 'civ5-dll',
+  },
+  {
+    absPath: path.join(REPO_ROOT, 'civ5-dll', 'docs', 'db.md'),
+    intoDir: 'civ5-dll',
+  },
+  {
+    absPath: path.join(REPO_ROOT, 'civ5-dll', 'docs', 'minidumps.md'),
+    intoDir: 'civ5-dll',
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -54,7 +74,12 @@ if (!BASE.startsWith('/')) BASE = '/' + BASE;
 // files with an all-caps or unconventional basename (e.g. an upstream
 // GAMECORE_OVERVIEW.md) still get a readable label.
 function titleFor(absPath, basename) {
-  const firstLines = fs.readFileSync(absPath, 'utf8').split('\n', 20);
+  // Normalize CRLF/CR (see renderMarkdown for why) before scanning for an H1,
+  // otherwise a trailing \r survives into the match and title-matching silently
+  // fails on Windows-authored files, falling back to a filename guess instead
+  // of the file's real heading.
+  const text = fs.readFileSync(absPath, 'utf8').replace(/\r\n?/g, '\n');
+  const firstLines = text.split('\n', 20);
   for (const line of firstLines) {
     const m = line.match(/^#\s+(.*)$/);
     if (m) return m[1].trim();
@@ -131,7 +156,7 @@ function titleCase(basename) {
   return basename
     .replace(/\.md$/, '')
     .split(/[-_]/)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
 }
 
@@ -205,6 +230,14 @@ function renderInline(text, fromRelPath) {
 }
 
 function renderMarkdown(md, fromRelPath) {
+  // Normalize CRLF/CR line endings up front. Without this, a trailing \r
+  // left on each line (common in files touched by Windows tooling — this
+  // codebase targets a Windows-only DLL) makes the list-item regexes below
+  // disagree with each other: the loose "is this a list line?" check matches,
+  // but the strict $-anchored one used to actually consume the line does
+  // not, so parseList() returns zero items without advancing `i` — an
+  // infinite loop.
+  md = md.replace(/\r\n?/g, '\n');
   const lines = md.split('\n');
   let html = [];
   let i = 0;
