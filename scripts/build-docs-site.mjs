@@ -23,6 +23,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const SRC_ROOT = path.join(REPO_ROOT, 'docs', 'developers');
 
+// Files that belong conceptually in the docs/developers/ tree but physically
+// live elsewhere (e.g. inside the civ5-dll submodule, which is upstream
+// Community Patch/Vox Populi content this repo doesn't own and shouldn't
+// duplicate). Each entry is placed under `intoDir` (a docs/developers/-relative
+// directory) using its own basename, so it appears alongside that folder's
+// regular files and in its auto-generated index.
+const EXTRA_SOURCES = [
+  {
+    absPath: path.join(REPO_ROOT, 'civ5-dll', 'CvGameCoreDLL_Expansion2', 'GAMECORE_OVERVIEW.md'),
+    intoDir: 'civ5-dll',
+  },
+];
+
 const args = process.argv.slice(2);
 function argVal(flag, fallback) {
   const i = args.indexOf(flag);
@@ -35,6 +48,19 @@ if (!BASE.startsWith('/')) BASE = '/' + BASE;
 
 // ---------------------------------------------------------------------------
 // 1. Walk docs/developers/, building a tree of { type: 'dir'|'file', name, relPath, children }
+
+// Display title for a file: its first H1 if it has one, else a title-cased
+// basename. Used for sidebar entries, index cards, and breadcrumbs alike, so
+// files with an all-caps or unconventional basename (e.g. an upstream
+// GAMECORE_OVERVIEW.md) still get a readable label.
+function titleFor(absPath, basename) {
+  const firstLines = fs.readFileSync(absPath, 'utf8').split('\n', 20);
+  for (const line of firstLines) {
+    const m = line.match(/^#\s+(.*)$/);
+    if (m) return m[1].trim();
+  }
+  return titleCase(basename);
+}
 
 function walk(absDir, relDir) {
   const entries = fs.readdirSync(absDir, { withFileTypes: true })
@@ -53,7 +79,7 @@ function walk(absDir, relDir) {
       const sub = walk(absPath, relPath);
       if (sub.children.length) children.push(sub);
     } else if (e.isFile() && e.name.endsWith('.md')) {
-      children.push({ type: 'file', name: e.name, relPath, absPath });
+      children.push({ type: 'file', name: e.name, relPath, absPath, title: titleFor(absPath, e.name) });
     }
   }
   return { type: 'dir', name: path.basename(absDir), relPath: relDir, children };
@@ -61,6 +87,42 @@ function walk(absDir, relDir) {
 
 const tree = walk(SRC_ROOT, '');
 tree.name = 'docs/developers';
+
+// Splice EXTRA_SOURCES into the tree, each under its intoDir. relPath/output
+// paths are still docs/developers/-relative (using the extra file's own
+// basename) even though absPath points outside SRC_ROOT entirely.
+function findDir(node, relDir) {
+  if (node.relPath === relDir) return node;
+  for (const c of node.children) {
+    if (c.type === 'dir') {
+      const found = findDir(c, relDir);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+for (const extra of EXTRA_SOURCES) {
+  const dirNode = findDir(tree, extra.intoDir);
+  if (!dirNode) {
+    throw new Error(`EXTRA_SOURCES: intoDir "${extra.intoDir}" not found in docs/developers/`);
+  }
+  if (!fs.existsSync(extra.absPath)) {
+    throw new Error(`EXTRA_SOURCES: file not found: ${extra.absPath}`);
+  }
+  const name = path.basename(extra.absPath);
+  dirNode.children.push({
+    type: 'file',
+    name,
+    relPath: path.join(extra.intoDir, name),
+    absPath: extra.absPath,
+    title: titleFor(extra.absPath, name),
+    external: true,
+  });
+  dirNode.children.sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // 2. Helpers: title-casing, output paths, url resolution
@@ -372,6 +434,11 @@ th { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacin
 .readmap .card h4 a { text-decoration: none; color: var(--ink); }
 .readmap .card h4 a:hover { color: var(--accent); }
 .readmap .card p { font-size: 0.82rem; margin: 0.35rem 0 0; color: var(--muted); }
+.callout {
+  background: var(--callout-bg); border-left: 3px solid var(--accent); border-radius: 4px;
+  padding: 0.8rem 1.1rem; margin: 0 0 1.4rem; font-size: 0.92rem; color: var(--muted); max-width: 66ch;
+}
+.callout code { background: none; padding: 0; }
 ::selection { background: var(--accent); color: var(--paper); }
 `;
 
@@ -398,7 +465,7 @@ function sidenavHtml(currentRelPath, currentKind) {
     if (node.type === 'file') {
       const cur = isCurrentFile(node.relPath);
       const url = fileUrl.get(node.relPath);
-      const label = titleCase(node.name);
+      const label = node.title;
       return `<li>${cur ? `<span class="current">${label}</span>` : `<a href="${url}">${label}</a>`}</li>`;
     }
     // directory
@@ -418,7 +485,7 @@ function sidenavHtml(currentRelPath, currentKind) {
   const topHtml = `<ul class="navlist top">` + rootFiles.map(f => {
     const cur = isCurrentFile(f.relPath);
     const url = fileUrl.get(f.relPath);
-    const label = titleCase(f.name);
+    const label = f.title;
     return `<li>${cur ? `<span class="current">${label}</span>` : `<a href="${url}">${label}</a>`}</li>`;
   }).join('') + `</ul>`;
   const dirsHtml = rootDirs.map(d => renderNode(d, 0)).join('');
@@ -485,14 +552,28 @@ function renderFile(node) {
   const md = fs.readFileSync(node.absPath, 'utf8');
   const { html, title } = renderMarkdown(md, node.relPath);
   const pageTitle = title || titleCase(node.name);
-  const folderTag = 'docs/developers/' + (path.dirname(node.relPath) === '.' ? '' : path.dirname(node.relPath));
   const crumbs = crumbsFor(node.relPath, false);
   crumbs[crumbs.length - 1] = { label: pageTitle }; // replace last with actual page title (no href)
+
+  let folderTag, bodyHtml;
+  if (node.external) {
+    // Real source lives outside docs/developers/ (e.g. in the civ5-dll
+    // submodule) — say so, rather than implying this repo owns the content.
+    const realRelPath = path.relative(REPO_ROOT, node.absPath).split(path.sep).join('/');
+    folderTag = `upstream · ${realRelPath}`;
+    bodyHtml = `<div class="callout">
+        Mirrored from <code>${realRelPath}</code> (the civ5-dll submodule) — not this repo's own content, included here for reference.
+      </div>${html}`;
+  } else {
+    folderTag = 'docs/developers/' + (path.dirname(node.relPath) === '.' ? '' : path.dirname(node.relPath));
+    bodyHtml = html;
+  }
+
   const page = pageHtml({
     title: `${pageTitle} — Vox Deorum Dev Docs`,
     folderTag,
     crumbs,
-    bodyHtml: html,
+    bodyHtml,
     currentRelPath: node.relPath,
     currentKind: 'file',
   });
@@ -508,7 +589,7 @@ function renderDirIndex(node) {
       const fileCountInDir = countFiles(c);
       return `<div class="card"><h4><a href="${dirUrl.get(c.relPath)}">${c.name} →</a></h4><p>${fileCountInDir} page${fileCountInDir === 1 ? '' : 's'}</p></div>`;
     }
-    return `<div class="card"><h4><a href="${fileUrl.get(c.relPath)}">${titleCase(c.name)}</a></h4></div>`;
+    return `<div class="card"><h4><a href="${fileUrl.get(c.relPath)}">${c.title}</a></h4></div>`;
   }).join('');
 
   const crumbs = isRoot
