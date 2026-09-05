@@ -27,6 +27,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # civ5-dll is a submodule; EXTRA_SOURCES in build-docs-site.mjs
+          # mirrors a few of its files (GAMECORE_OVERVIEW.md, README.md, etc.)
+          # into the site, so it must actually be checked out.
+          submodules: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
