@@ -21,3 +21,7 @@ scripts/.dll-cache
 # Source of truth is .agents/skills/; this link is machine-local (recreate with
 # `mklink /J .claude\skills .agents\skills`).
 .claude/skills/
+
+# Generated static docs site (scripts/build-docs-site.mjs); built fresh by the
+# docs-site GitHub Pages workflow, not committed.
+/site-dist/

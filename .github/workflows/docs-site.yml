@@ -1,0 +1,58 @@
+name: Deploy Developer Docs Site
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/developers/**'
+      - 'scripts/build-docs-site.mjs'
+      - '.github/workflows/docs-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one concurrent deployment; new pushes cancel any in-progress build
+# rather than queueing (docs content, no need to serialize deploys).
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build docs site
+        # Project Pages sites are served from /<repo-name>/, so every generated
+        # link needs that prefix baked in.
+        run: node scripts/build-docs-site.mjs --out site-dist --base "/${{ github.event.repository.name }}/"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
